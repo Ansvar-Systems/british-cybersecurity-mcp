@@ -126,6 +126,11 @@ const TOOLS = [
     inputSchema: { type: "object" as const, properties: {}, required: [] },
   },
   {
+    name: "gb_cyber_list_sources",
+    description: "List all data sources used by this MCP server, with URLs and descriptions.",
+    inputSchema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
     name: "gb_cyber_about",
     description: "Return metadata about this MCP server: version, data source, coverage, and tool list.",
     inputSchema: { type: "object" as const, properties: {}, required: [] },
@@ -229,6 +234,43 @@ function createMcpServer(): Server {
         case "gb_cyber_list_frameworks": {
           const frameworks = listFrameworks();
           return textContent({ frameworks, count: frameworks.length });
+        }
+
+        case "gb_cyber_list_sources": {
+          return textContent({
+            sources: [
+              {
+                name: "NCSC (National Cyber Security Centre)",
+                url: "https://www.ncsc.gov.uk/",
+                description: "Security guidance, CAF, threat reports",
+              },
+              {
+                name: "Cyber Assessment Framework (CAF)",
+                url: "https://www.ncsc.gov.uk/collection/caf",
+                description: "14 principles, 39 contributing outcomes",
+              },
+              {
+                name: "NCSC Security Advisories",
+                url: "https://www.ncsc.gov.uk/section/keep-up-to-date/threat-reports",
+                description: "CVE-tagged advisories, severity ratings",
+              },
+              {
+                name: "10 Steps to Cyber Security",
+                url: "https://www.ncsc.gov.uk/collection/10-steps",
+                description: "Foundational security framework",
+              },
+              {
+                name: "Cyber Essentials",
+                url: "https://www.ncsc.gov.uk/cyberessentials",
+                description: "Certification scheme requirements",
+              },
+              {
+                name: "NIS Regulations 2018",
+                url: "https://www.legislation.gov.uk/",
+                description: "Network and information systems security",
+              },
+            ],
+          });
         }
 
         case "gb_cyber_about": {
