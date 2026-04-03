@@ -1,34 +1,37 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "eu.ansvar/british-cybersecurity-mcp",
-  "description": "Query NCSC (UK National Cyber Security Centre) guidance including Cyber Essentials, 10 Steps to Cyber Security, CAF, and security advisories",
+  "description": "NCSC (UK National Cyber Security Centre) MCP server — guidance, advisories, Cyber Essentials, and CAF frameworks",
   "repository": {
     "url": "https://github.com/Ansvar-Systems/british-cybersecurity-mcp",
     "source": "github"
   },
   "homepage": "https://ansvar.eu",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "license": "Apache-2.0",
   "keywords": [
-    "ncsc",
-    "british-cybersecurity",
-    "cyber-essentials",
-    "caf",
-    "10-steps",
     "cybersecurity",
-    "uk",
-    "information-security",
+    "united kingdom",
+    "regulation",
     "compliance",
-    "mcp",
-    "ansvar"
+    "mcp"
   ],
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@ansvar/british-cybersecurity-mcp",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "transport": {
         "type": "stdio"
+      }
+    },
+    {
+      "registryType": "npm",
+      "identifier": "@ansvar/british-cybersecurity-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "streamable-http",
+        "url": "https://mcp.ansvar.eu/british-cybersecurity/mcp"
       }
     }
   ]
