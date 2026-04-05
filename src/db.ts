@@ -261,3 +261,25 @@ export function listFrameworks(): Framework[] {
     .prepare("SELECT * FROM frameworks ORDER BY id")
     .all() as Framework[];
 }
+
+// --- Stats -------------------------------------------------------------------
+
+export interface DbStats {
+  guidance_count: number;
+  advisories_count: number;
+  frameworks_count: number;
+}
+
+export function getDbStats(): DbStats {
+  const db = getDb();
+  const guidance_count = (
+    db.prepare("SELECT COUNT(*) as count FROM guidance").get() as { count: number }
+  ).count;
+  const advisories_count = (
+    db.prepare("SELECT COUNT(*) as count FROM advisories").get() as { count: number }
+  ).count;
+  const frameworks_count = (
+    db.prepare("SELECT COUNT(*) as count FROM frameworks").get() as { count: number }
+  ).count;
+  return { guidance_count, advisories_count, frameworks_count };
+}
