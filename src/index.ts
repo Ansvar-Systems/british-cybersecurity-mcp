@@ -26,6 +26,7 @@ import {
   searchAdvisories,
   getAdvisory,
   listFrameworks,
+  getDbStats,
 } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -87,12 +88,12 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        reference: {
+        document_id: {
           type: "string",
           description: "NCSC document reference (e.g., 'NCSC-CE-2024', 'NCSC-CAF-3.2')",
         },
       },
-      required: ["reference"],
+      required: ["document_id"],
     },
   },
   {
@@ -162,6 +163,16 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "gb_cyber_check_data_freshness",
+    description:
+      "Check the current state of the database: document counts for guidance, advisories, and frameworks. Use this to verify data is loaded and assess coverage before making compliance decisions.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 // --- Zod schemas for argument validation --------------------------------------
@@ -175,7 +186,7 @@ const SearchGuidanceArgs = z.object({
 });
 
 const GetGuidanceArgs = z.object({
-  reference: z.string().min(1),
+  document_id: z.string().min(1),
 });
 
 const SearchAdvisoriesArgs = z.object({
@@ -190,10 +201,22 @@ const GetAdvisoryArgs = z.object({
 
 // --- Helper ------------------------------------------------------------------
 
+const META = {
+  disclaimer:
+    "Not legal or regulatory advice. Verify all references against primary sources before making compliance decisions.",
+  copyright:
+    "© Crown Copyright (NCSC). Data reproduced under Open Government Licence v3.0.",
+  source_url: "https://www.ncsc.gov.uk/",
+} as const;
+
 function textContent(data: unknown) {
+  const payload =
+    typeof data === "object" && data !== null
+      ? { _meta: META, ...(data as Record<string, unknown>) }
+      : { _meta: META, data };
   return {
     content: [
-      { type: "text" as const, text: JSON.stringify(data, null, 2) },
+      { type: "text" as const, text: JSON.stringify(payload, null, 2) },
     ],
   };
 }
@@ -235,9 +258,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "gb_cyber_get_guidance": {
         const parsed = GetGuidanceArgs.parse(args);
-        const doc = getGuidance(parsed.reference);
+        const doc = getGuidance(parsed.document_id);
         if (!doc) {
-          return errorContent(`Guidance document not found: ${parsed.reference}`);
+          return errorContent(`Guidance document not found: ${parsed.document_id}`);
         }
         return textContent(doc);
       }
@@ -316,6 +339,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             frameworks: "Cyber Essentials, 10 Steps, CAF",
           },
           tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
+        });
+      }
+
+      case "gb_cyber_check_data_freshness": {
+        const stats = getDbStats();
+        return textContent({
+          guidance_count: stats.guidance_count,
+          advisories_count: stats.advisories_count,
+          frameworks_count: stats.frameworks_count,
+          note: "Counts reflect documents currently loaded in the database. Use gb_cyber_list_sources for source URLs and coverage details.",
         });
       }
 
