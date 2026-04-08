@@ -4,7 +4,7 @@
 
 [![npm version](https://badge.fury.io/js/%40ansvar%2Fbritish-cybersecurity-mcp.svg)](https://www.npmjs.com/package/@ansvar/british-cybersecurity-mcp)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![CI](https://github.com/Ansvar-Systems/british-cybersecurity-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Ansvar-Systems/british-cybersecurity-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/Ansvar-Systems/british-cybersecurity-mcp/actions/workflows/ghcr-build.yml/badge.svg)](https://github.com/Ansvar-Systems/british-cybersecurity-mcp/actions/workflows/ghcr-build.yml)
 
 Query British cybersecurity data -- regulations, decisions, and requirements from NCSC (National Cyber Security Centre) -- directly from Claude, Cursor, or any MCP-compatible client.
 

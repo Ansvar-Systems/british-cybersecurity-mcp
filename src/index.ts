@@ -26,8 +26,8 @@ import {
   searchAdvisories,
   getAdvisory,
   listFrameworks,
+  getDbStats,
 } from "./db.js";
-import { buildCitation } from './citation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -54,11 +54,29 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Search query (e.g., 'patch management', 'network security', 'incident response')" },
-        type: { type: "string", enum: ["guidance", "framework", "technical", "board"], description: "Filter by document type. Optional." },
-        series: { type: "string", enum: ["Cyber Essentials", "10 Steps", "CAF", "NCSC"], description: "Filter by NCSC series. Optional." },
-        status: { type: "string", enum: ["current", "superseded", "draft"], description: "Filter by document status. Defaults to returning all statuses." },
-        limit: { type: "number", description: "Maximum number of results to return. Defaults to 20." },
+        query: {
+          type: "string",
+          description: "Search query (e.g., 'patch management', 'network security', 'incident response')",
+        },
+        type: {
+          type: "string",
+          enum: ["guidance", "framework", "technical", "board"],
+          description: "Filter by document type. Optional.",
+        },
+        series: {
+          type: "string",
+          enum: ["Cyber Essentials", "10 Steps", "CAF", "NCSC"],
+          description: "Filter by NCSC series. Optional.",
+        },
+        status: {
+          type: "string",
+          enum: ["current", "superseded", "draft"],
+          description: "Filter by document status. Defaults to returning all statuses.",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results to return. Defaults to 20.",
+        },
       },
       required: ["query"],
     },
@@ -70,9 +88,12 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        reference: { type: "string", description: "NCSC document reference (e.g., 'NCSC-CE-2024', 'NCSC-CAF-3.2')" },
+        document_id: {
+          type: "string",
+          description: "NCSC document reference (e.g., 'NCSC-CE-2024', 'NCSC-CAF-3.2')",
+        },
       },
-      required: ["reference"],
+      required: ["document_id"],
     },
   },
   {
@@ -82,9 +103,19 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Search query (e.g., 'ransomware', 'zero-day', 'supply chain')" },
-        severity: { type: "string", enum: ["critical", "high", "medium", "low"], description: "Filter by severity level. Optional." },
-        limit: { type: "number", description: "Maximum number of results to return. Defaults to 20." },
+        query: {
+          type: "string",
+          description: "Search query (e.g., 'ransomware', 'zero-day', 'supply chain')",
+        },
+        severity: {
+          type: "string",
+          enum: ["critical", "high", "medium", "low"],
+          description: "Filter by severity level. Optional.",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results to return. Defaults to 20.",
+        },
       },
       required: ["query"],
     },
@@ -96,7 +127,10 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        reference: { type: "string", description: "NCSC advisory reference (e.g., 'NCSC-ADV-2024-001')" },
+        reference: {
+          type: "string",
+          description: "NCSC advisory reference (e.g., 'NCSC-ADV-2024-001')",
+        },
       },
       required: ["reference"],
     },
@@ -105,17 +139,39 @@ const TOOLS = [
     name: "gb_cyber_list_frameworks",
     description:
       "List all NCSC frameworks and guidance series covered in this MCP, including Cyber Essentials, 10 Steps to Cyber Security, and the Cyber Assessment Framework (CAF).",
-    inputSchema: { type: "object" as const, properties: {}, required: [] },
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
   },
   {
     name: "gb_cyber_list_sources",
     description: "List all data sources used by this MCP server, with URLs and descriptions.",
-    inputSchema: { type: "object" as const, properties: {}, required: [] },
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
   },
   {
     name: "gb_cyber_about",
     description: "Return metadata about this MCP server: version, data source, coverage, and tool list.",
-    inputSchema: { type: "object" as const, properties: {}, required: [] },
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "gb_cyber_check_data_freshness",
+    description:
+      "Check the current state of the database: document counts for guidance, advisories, and frameworks. Use this to verify data is loaded and assess coverage before making compliance decisions.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
   },
 ];
 
@@ -129,7 +185,9 @@ const SearchGuidanceArgs = z.object({
   limit: z.number().int().positive().max(100).optional(),
 });
 
-const GetGuidanceArgs = z.object({ reference: z.string().min(1) });
+const GetGuidanceArgs = z.object({
+  document_id: z.string().min(1),
+});
 
 const SearchAdvisoriesArgs = z.object({
   query: z.string().min(1),
@@ -137,16 +195,37 @@ const SearchAdvisoriesArgs = z.object({
   limit: z.number().int().positive().max(100).optional(),
 });
 
-const GetAdvisoryArgs = z.object({ reference: z.string().min(1) });
+const GetAdvisoryArgs = z.object({
+  reference: z.string().min(1),
+});
 
 // --- Helper ------------------------------------------------------------------
 
+const META = {
+  disclaimer:
+    "Not legal or regulatory advice. Verify all references against primary sources before making compliance decisions.",
+  copyright:
+    "© Crown Copyright (NCSC). Data reproduced under Open Government Licence v3.0.",
+  source_url: "https://www.ncsc.gov.uk/",
+} as const;
+
 function textContent(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  const payload =
+    typeof data === "object" && data !== null
+      ? { _meta: META, ...(data as Record<string, unknown>) }
+      : { _meta: META, data };
+  return {
+    content: [
+      { type: "text" as const, text: JSON.stringify(payload, null, 2) },
+    ],
+  };
 }
 
 function errorContent(message: string) {
-  return { content: [{ type: "text" as const, text: message }], isError: true as const };
+  return {
+    content: [{ type: "text" as const, text: message }],
+    isError: true as const,
+  };
 }
 
 // --- Server setup ------------------------------------------------------------
@@ -156,7 +235,9 @@ const server = new Server(
   { capabilities: { tools: {} } },
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: TOOLS,
+}));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
@@ -165,31 +246,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case "gb_cyber_search_guidance": {
         const parsed = SearchGuidanceArgs.parse(args);
-        const results = searchGuidance({ query: parsed.query, type: parsed.type, series: parsed.series, status: parsed.status, limit: parsed.limit });
+        const results = searchGuidance({
+          query: parsed.query,
+          type: parsed.type,
+          series: parsed.series,
+          status: parsed.status,
+          limit: parsed.limit,
+        });
         return textContent({ results, count: results.length });
       }
 
       case "gb_cyber_get_guidance": {
         const parsed = GetGuidanceArgs.parse(args);
-        const doc = getGuidance(parsed.reference);
+        const doc = getGuidance(parsed.document_id);
         if (!doc) {
-          return errorContent(`Guidance document not found: ${parsed.reference}`);
+          return errorContent(`Guidance document not found: ${parsed.document_id}`);
         }
-        return textContent({
-          ...(typeof doc === 'object' ? doc : { data: doc }),
-          _citation: buildCitation(
-            doc.reference || parsed.reference,
-            doc.title || doc.name || parsed.reference,
-            'gb_cyber_get_guidance',
-            { reference: parsed.reference },
-            doc.url || doc.source_url || null,
-          ),
-        });
+        return textContent(doc);
       }
 
       case "gb_cyber_search_advisories": {
         const parsed = SearchAdvisoriesArgs.parse(args);
-        const results = searchAdvisories({ query: parsed.query, severity: parsed.severity, limit: parsed.limit });
+        const results = searchAdvisories({
+          query: parsed.query,
+          severity: parsed.severity,
+          limit: parsed.limit,
+        });
         return textContent({ results, count: results.length });
       }
 
@@ -199,16 +281,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!advisory) {
           return errorContent(`Advisory not found: ${parsed.reference}`);
         }
-        return textContent({
-          ...(typeof advisory === 'object' ? advisory : { data: advisory }),
-          _citation: buildCitation(
-            advisory.reference || parsed.reference,
-            advisory.title || advisory.subject || parsed.reference,
-            'gb_cyber_get_advisory',
-            { reference: parsed.reference },
-            advisory.url || advisory.source_url || null,
-          ),
-        });
+        return textContent(advisory);
       }
 
       case "gb_cyber_list_frameworks": {
@@ -219,23 +292,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "gb_cyber_list_sources": {
         return textContent({
           sources: [
-            { name: "NCSC (National Cyber Security Centre)", url: "https://www.ncsc.gov.uk/", description: "Security guidance, CAF, threat reports" },
-            { name: "Cyber Assessment Framework (CAF)", url: "https://www.ncsc.gov.uk/collection/caf", description: "14 principles, 39 contributing outcomes" },
-            { name: "NCSC Security Advisories", url: "https://www.ncsc.gov.uk/section/keep-up-to-date/threat-reports", description: "CVE-tagged advisories, severity ratings" },
-            { name: "10 Steps to Cyber Security", url: "https://www.ncsc.gov.uk/collection/10-steps", description: "Foundational security framework" },
-            { name: "Cyber Essentials", url: "https://www.ncsc.gov.uk/cyberessentials", description: "Certification scheme requirements" },
-            { name: "NIS Regulations 2018", url: "https://www.legislation.gov.uk/", description: "Network and information systems security" },
+            {
+              name: "NCSC (National Cyber Security Centre)",
+              url: "https://www.ncsc.gov.uk/",
+              description: "Security guidance, CAF, threat reports",
+            },
+            {
+              name: "Cyber Assessment Framework (CAF)",
+              url: "https://www.ncsc.gov.uk/collection/caf",
+              description: "14 principles, 39 contributing outcomes",
+            },
+            {
+              name: "NCSC Security Advisories",
+              url: "https://www.ncsc.gov.uk/section/keep-up-to-date/threat-reports",
+              description: "CVE-tagged advisories, severity ratings",
+            },
+            {
+              name: "10 Steps to Cyber Security",
+              url: "https://www.ncsc.gov.uk/collection/10-steps",
+              description: "Foundational security framework",
+            },
+            {
+              name: "Cyber Essentials",
+              url: "https://www.ncsc.gov.uk/cyberessentials",
+              description: "Certification scheme requirements",
+            },
+            {
+              name: "NIS Regulations 2018",
+              url: "https://www.legislation.gov.uk/",
+              description: "Network and information systems security",
+            },
           ],
         });
       }
 
       case "gb_cyber_about": {
         return textContent({
-          name: SERVER_NAME, version: pkgVersion,
-          description: "NCSC (UK National Cyber Security Centre) MCP server. Provides access to NCSC guidance including Cyber Essentials, 10 Steps to Cyber Security, Cyber Assessment Framework (CAF), and security advisories.",
+          name: SERVER_NAME,
+          version: pkgVersion,
+          description:
+            "NCSC (UK National Cyber Security Centre) MCP server. Provides access to NCSC guidance including Cyber Essentials, 10 Steps to Cyber Security, Cyber Assessment Framework (CAF), and security advisories.",
           data_source: "NCSC (https://www.ncsc.gov.uk/)",
-          coverage: { guidance: "Cyber Essentials, 10 Steps to Cyber Security, Cyber Assessment Framework (CAF), board-level guidance", advisories: "NCSC security advisories and alerts", frameworks: "Cyber Essentials, 10 Steps, CAF" },
+          coverage: {
+            guidance: "Cyber Essentials, 10 Steps to Cyber Security, Cyber Assessment Framework (CAF), board-level guidance",
+            advisories: "NCSC security advisories and alerts",
+            frameworks: "Cyber Essentials, 10 Steps, CAF",
+          },
           tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
+        });
+      }
+
+      case "gb_cyber_check_data_freshness": {
+        const stats = getDbStats();
+        return textContent({
+          guidance_count: stats.guidance_count,
+          advisories_count: stats.advisories_count,
+          frameworks_count: stats.frameworks_count,
+          note: "Counts reflect documents currently loaded in the database. Use gb_cyber_list_sources for source URLs and coverage details.",
         });
       }
 

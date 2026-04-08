@@ -29,6 +29,7 @@ import {
   searchAdvisories,
   getAdvisory,
   listFrameworks,
+  getDbStats,
 } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -85,9 +86,9 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        reference: { type: "string", description: "NCSC document reference" },
+        document_id: { type: "string", description: "NCSC document reference (e.g., 'NCSC-CE-2024', 'NCSC-CAF-3.2')" },
       },
-      required: ["reference"],
+      required: ["document_id"],
     },
   },
   {
@@ -135,6 +136,12 @@ const TOOLS = [
     description: "Return metadata about this MCP server: version, data source, coverage, and tool list.",
     inputSchema: { type: "object" as const, properties: {}, required: [] },
   },
+  {
+    name: "gb_cyber_check_data_freshness",
+    description:
+      "Check the current state of the database: document counts for guidance, advisories, and frameworks. Use this to verify data is loaded and assess coverage before making compliance decisions.",
+    inputSchema: { type: "object" as const, properties: {}, required: [] },
+  },
 ];
 
 // --- Zod schemas -------------------------------------------------------------
@@ -148,7 +155,7 @@ const SearchGuidanceArgs = z.object({
 });
 
 const GetGuidanceArgs = z.object({
-  reference: z.string().min(1),
+  document_id: z.string().min(1),
 });
 
 const SearchAdvisoriesArgs = z.object({
@@ -160,6 +167,16 @@ const SearchAdvisoriesArgs = z.object({
 const GetAdvisoryArgs = z.object({
   reference: z.string().min(1),
 });
+
+// --- Meta block --------------------------------------------------------------
+
+const META = {
+  disclaimer:
+    "Not legal or regulatory advice. Verify all references against primary sources before making compliance decisions.",
+  copyright:
+    "© Crown Copyright (NCSC). Data reproduced under Open Government Licence v3.0.",
+  source_url: "https://www.ncsc.gov.uk/",
+} as const;
 
 // --- MCP server factory ------------------------------------------------------
 
@@ -177,8 +194,12 @@ function createMcpServer(): Server {
     const { name, arguments: args = {} } = request.params;
 
     function textContent(data: unknown) {
+      const payload =
+        typeof data === "object" && data !== null
+          ? { _meta: META, ...(data as Record<string, unknown>) }
+          : { _meta: META, data };
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
       };
     }
 
@@ -205,9 +226,9 @@ function createMcpServer(): Server {
 
         case "gb_cyber_get_guidance": {
           const parsed = GetGuidanceArgs.parse(args);
-          const doc = getGuidance(parsed.reference);
+          const doc = getGuidance(parsed.document_id);
           if (!doc) {
-            return errorContent(`Guidance document not found: ${parsed.reference}`);
+            return errorContent(`Guidance document not found: ${parsed.document_id}`);
           }
           return textContent(doc);
         }
@@ -281,6 +302,16 @@ function createMcpServer(): Server {
               "NCSC (UK National Cyber Security Centre) MCP server. Provides access to NCSC guidance including Cyber Essentials, 10 Steps to Cyber Security, Cyber Assessment Framework (CAF), and security advisories.",
             data_source: "NCSC (https://www.ncsc.gov.uk/)",
             tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
+          });
+        }
+
+        case "gb_cyber_check_data_freshness": {
+          const stats = getDbStats();
+          return textContent({
+            guidance_count: stats.guidance_count,
+            advisories_count: stats.advisories_count,
+            frameworks_count: stats.frameworks_count,
+            note: "Counts reflect documents currently loaded in the database. Use gb_cyber_list_sources for source URLs and coverage details.",
           });
         }
 
