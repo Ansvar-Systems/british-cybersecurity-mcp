@@ -9,7 +9,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Stage 1: Build TypeScript ---
-FROM node:20-slim AS builder
+FROM node:20-slim@sha256:7129e1780341f8dff603243d2b0cb9179c1716291ff6a86706946b629d3c544a AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -19,7 +19,7 @@ COPY src/ src/
 RUN npm run build
 
 # --- Stage 2: Production ---
-FROM node:20-slim AS production
+FROM node:20-slim@sha256:7129e1780341f8dff603243d2b0cb9179c1716291ff6a86706946b629d3c544a AS production
 
 WORKDIR /app
 ENV NODE_ENV=production
