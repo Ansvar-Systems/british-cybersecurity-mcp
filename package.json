@@ -2,7 +2,7 @@
   "name": "@ansvar/british-cybersecurity-mcp",
   "version": "0.1.0",
   "mcpName": "eu.ansvar/british-cybersecurity-mcp",
-  "description": "NCSC (UK National Cyber Security Centre) MCP server — guidance, advisories, Cyber Essentials, and CAF frameworks",
+  "description": "NCSC (UK National Cyber Security Centre) MCP server \u2014 guidance, advisories, Cyber Essentials, and CAF frameworks",
   "type": "module",
   "main": "dist/src/index.js",
   "bin": {
@@ -44,9 +44,9 @@
     "dev": "tsx src/http-server.ts",
     "start": "node dist/src/http-server.js",
     "seed": "npx tsx scripts/seed-sample.ts",
-    "ingest": "npx tsx scripts/ingest-ncsc.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:contract": "echo \"No contract tests yet\" && exit 0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
