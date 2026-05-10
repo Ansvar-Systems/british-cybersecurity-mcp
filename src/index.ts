@@ -212,7 +212,7 @@ const META = {
 function textContent(data: unknown) {
   const payload =
     typeof data === "object" && data !== null
-      ? { _meta: META, ...(data as Record<string, unknown>) }
+      ? { _meta: META, ...(data as unknown as Record<string, unknown>) }
       : { _meta: META, data };
   return {
     content: [
